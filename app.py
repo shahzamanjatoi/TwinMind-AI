@@ -18,6 +18,7 @@ import plotly.io as pio
 import requests
 
 import streamlit as st
+from amd_live import get_gpu_status, render_live_gpu_screening
 
 
 
@@ -123,7 +124,7 @@ DATA_DIR_CANDIDATES = [
 
 GITHUB_DATA_API = (
 
-    "https\://api.github.com/repos/"
+    "https://api.github.com/repos/"
 
     "UTK-ASL/Dataset_digital_twin_predictive_maintenance/"
 
@@ -1679,6 +1680,16 @@ with st.sidebar:
 
     st.header("Project status")
 
+    gpu_available, gpu_name, gpu_backend = get_gpu_status()
+    if gpu_available:
+        st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
+    else:
+        st.info(f"Compute: CPU ({gpu_backend})")
+    st.caption(
+        "The fault classifier is a scikit-learn model and runs on the CPU. "
+        "The GPU is used by the live screening in the 'AMD GPU Evidence' tab."
+    )
+
 
 
     if model_path:
@@ -2326,6 +2337,8 @@ tabs = st.tabs(
 # ------------------------------------------------------------
 
 with tabs[7]:
+    render_live_gpu_screening(selected_df, model_features, selected_recording_name)
+    st.divider()
     st.subheader("AMD GPU Analysis")
     st.caption(
         "Previously computed AMD Radeon Pro W7900D workload using "
