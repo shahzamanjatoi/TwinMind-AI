@@ -1,0 +1,198 @@
+{
+  "validation_method": "chronological 80/20 split within each file",
+  "rows_used": 21137,
+  "train_rows": 16908,
+  "test_rows": 4229,
+  "features": [
+    "ch1_bias",
+    "ch1_derivedPk",
+    "ch1_direct",
+    "ch1_directRMS",
+    "ch1_velocityPk",
+    "ch1_velocityRMS",
+    "ch2_bias",
+    "ch2_derivedPk",
+    "ch2_direct",
+    "ch2_directRMS",
+    "ch2_velocityPk",
+    "ch2_velocityRMS"
+  ],
+  "file_splits": [
+    {
+      "file": "Combined_Baseline1.csv",
+      "class": "baseline",
+      "rows": 2965,
+      "train_rows": 2372,
+      "test_rows": 593
+    },
+    {
+      "file": "Combined_Baseline2.csv",
+      "class": "baseline",
+      "rows": 2973,
+      "train_rows": 2378,
+      "test_rows": 595
+    },
+    {
+      "file": "Combined_BentShaft.csv",
+      "class": "bent_shaft",
+      "rows": 2898,
+      "train_rows": 2318,
+      "test_rows": 580
+    },
+    {
+      "file": "Combined_EccentricRotor.csv",
+      "class": "eccentric_rotor",
+      "rows": 3403,
+      "train_rows": 2722,
+      "test_rows": 681
+    },
+    {
+      "file": "Combined_FaultedBearing.csv",
+      "class": "faulted_bearing",
+      "rows": 2380,
+      "train_rows": 1904,
+      "test_rows": 476
+    },
+    {
+      "file": "Combined_FaultedCoupling.csv",
+      "class": "faulted_coupling",
+      "rows": 2098,
+      "train_rows": 1678,
+      "test_rows": 420
+    },
+    {
+      "file": "Combined_Imbalance.csv",
+      "class": "imbalance",
+      "rows": 4420,
+      "train_rows": 3536,
+      "test_rows": 884
+    }
+  ],
+  "train_class_counts": {
+    "baseline": 4750,
+    "imbalance": 3536,
+    "eccentric_rotor": 2722,
+    "bent_shaft": 2318,
+    "faulted_bearing": 1904,
+    "faulted_coupling": 1678
+  },
+  "test_class_counts": {
+    "baseline": 1188,
+    "imbalance": 884,
+    "eccentric_rotor": 681,
+    "bent_shaft": 580,
+    "faulted_bearing": 476,
+    "faulted_coupling": 420
+  },
+  "accuracy": 0.8139039962165997,
+  "classification_report": {
+    "baseline": {
+      "precision": 0.9844559585492227,
+      "recall": 0.4797979797979798,
+      "f1-score": 0.6451612903225806,
+      "support": 1188.0
+    },
+    "bent_shaft": {
+      "precision": 0.45813586097946285,
+      "recall": 1.0,
+      "f1-score": 0.628385698808234,
+      "support": 580.0
+    },
+    "eccentric_rotor": {
+      "precision": 1.0,
+      "recall": 0.8105726872246696,
+      "f1-score": 0.8953771289537713,
+      "support": 681.0
+    },
+    "faulted_bearing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 476.0
+    },
+    "faulted_coupling": {
+      "precision": 1.0,
+      "recall": 0.9095238095238095,
+      "f1-score": 0.9526184538653366,
+      "support": 420.0
+    },
+    "imbalance": {
+      "precision": 0.9055441478439425,
+      "recall": 0.997737556561086,
+      "f1-score": 0.9494079655543596,
+      "support": 884.0
+    },
+    "accuracy": 0.8139039962165997,
+    "macro avg": {
+      "precision": 0.8913559945621046,
+      "recall": 0.8662720055179242,
+      "f1-score": 0.8451584229173804,
+      "support": 4229.0
+    },
+    "weighted avg": {
+      "precision": 0.9015733045208347,
+      "recall": 0.8139039962165997,
+      "f1-score": 0.8172247659501098,
+      "support": 4229.0
+    }
+  },
+  "confusion_matrix_labels": [
+    "baseline",
+    "bent_shaft",
+    "eccentric_rotor",
+    "faulted_bearing",
+    "faulted_coupling",
+    "imbalance"
+  ],
+  "confusion_matrix": [
+    [
+      570,
+      618,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      580,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      37,
+      552,
+      0,
+      0,
+      92
+    ],
+    [
+      0,
+      0,
+      0,
+      476,
+      0,
+      0
+    ],
+    [
+      7,
+      31,
+      0,
+      0,
+      382,
+      0
+    ],
+    [
+      2,
+      0,
+      0,
+      0,
+      0,
+      882
+    ]
+  ],
+  "evaluation_note": "Chronological holdout reduces random-row leakage but records within each file may still be correlated. Most fault categories have only one source recording, so unseen-run generalization has not been established."
+}

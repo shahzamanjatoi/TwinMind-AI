@@ -1,0 +1,32 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.streamlit/secrets.toml
+data/
+
+# Local backups and temporary scripts
+*.bak
+*.bak.*
+*.backup
+*.backup-*
+*.before_*.bak
+*.before_*.backup
+app_backup_*.py
+fix_*.py
+apply_*.py
+refine_layout.py
+ui_upgrade.py
+chart_theme_snippet.py
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Local logs and environment files
+*.log
+.env.*
+!.env.example
+# Additional local app backups
+app.py.before*
+app_backup*
+.gitignore.backup-*
