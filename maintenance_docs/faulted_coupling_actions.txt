@@ -1,0 +1,5 @@
+Faulted coupling - recommended checks (from the TwinMind app):
+Pattern is consistent with a coupling fault.
+Inspect the coupling for wear, cracks, or looseness.
+Verify shaft alignment.
+Check fasteners and the flexible element.

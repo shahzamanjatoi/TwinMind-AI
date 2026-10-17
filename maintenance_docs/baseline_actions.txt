@@ -1,2 +1,4 @@
-﻿Baseline - recommended actions (from the TwinMind app):
+Baseline - recommended checks (from the TwinMind app):
+Vibration pattern matches normal (baseline) operation.
+Majority of samples are consistent with baseline; review any minority fault predictions before treating this as a healthy reference.
 Keep routine monitoring and store this recording as a healthy reference.

@@ -1,4 +1,4 @@
-"""TwinMind Maintenance Assistant: a small tool-using LLM agent.
+﻿"""TwinMind Maintenance Assistant: a small tool-using LLM agent.
 
 It answers questions about the saved TwinMind results using four tools that
 read files in this repo (no live motor, no invented numbers):
@@ -105,115 +105,73 @@ def model_reliability(condition="all"):
 
 
 def search_docs(query, k=2):
-    words = {w for w in re.findall(r"[a-z0-9]+", str(query).lower()) if len(w) > 2}
+    """Retrieve maintenance passages while preventing cross-fault matches."""
+    words = {
+        w for w in re.findall(r"[a-z0-9]+", str(query).lower())
+        if len(w) > 2
+    }
+
+    topic_groups = {
+        "bearing": {"bearing", "bearings"},
+        "shaft": {"shaft", "shafts"},
+        "rotor": {"rotor", "rotors"},
+        "coupling": {"coupling", "couplings"},
+        "imbalance": {"imbalance", "unbalance"},
+    }
+    query_topics = {
+        topic for topic, variants in topic_groups.items()
+        if words & variants
+    }
+
     scored = []
     if DOCS_DIR.is_dir():
         for path in sorted(DOCS_DIR.glob("*.txt")):
-            text = path.read_text(encoding="utf-8", errors="replace").lstrip("\ufeff")
-            chunks = [c.strip() for c in re.split(r"\n\s*\n", text) if c.strip()] or [text.strip()]
+            text = path.read_text(
+                encoding="utf-8", errors="replace"
+            ).lstrip("\\ufeff")
+            chunks = [
+                c.strip()
+                for c in re.split(r"\\n\\s*\\n", text)
+                if c.strip()
+            ] or [text.strip()]
+
             for chunk in chunks:
-                score = len(words & set(re.findall(r"[a-z0-9]+", chunk.lower())))
+                searchable_text = (
+                    path.stem.replace("_", " ").lower()
+                    + " " + chunk.lower()
+                )
+                doc_words = set(
+                    re.findall(r"[a-z0-9]+", searchable_text)
+                )
+
+                # If a fault type is named, require matching topic evidence.
+                if query_topics and not any(
+                    topic in doc_words for topic in query_topics
+                ):
+                    continue
+
+                score = len(words & doc_words)
                 if score:
                     scored.append((score, path.name, chunk[:600]))
+
     scored.sort(key=lambda item: -item[0])
     if not scored:
-        return {"matches": [], "note": "No matching passage in the maintenance documents."}
-    return {"matches": [{"file": f, "passage": p} for _, f, p in scored[: int(k)]]}
+        if query_topics:
+            topic = ", ".join(sorted(query_topics))
+            note = (
+                f"No relevant maintenance guidance for {topic} "
+                "was found in the available documents."
+            )
+        else:
+            note = "No matching passage in the maintenance documents."
+        return {"matches": [], "note": note}
 
-
-TOOLS = {
-    "list_recordings": (list_recordings, "()", "names of the recordings that have screening results"),
-    "flagged_summary": (flagged_summary, "(recording)", "rows, flagged rows, flagged % and top scores for one recording"),
-    "model_reliability": (model_reliability, "(condition)", "precision/recall and typical mistakes of the classifier for one condition, or 'all'"),
-    "search_docs": (search_docs, "(query)", "passages from the maintenance documents (inspection and vibration notes)"),
-}
-
-SYSTEM = (
-    "You are the TwinMind Maintenance Assistant. You help an engineer understand "
-    "saved vibration recordings of a motor test rig. Rules: get facts from tools, "
-    "never invent numbers or documents, never say a fault is confirmed, and say so "
-    "when the tools do not contain the answer. Reply with exactly ONE JSON object "
-    'and nothing else: {"tool": "<name>", "args": {...}} to call a tool, or '
-    '{"final": "<your answer>"} when you are done. Keep answers short and plain.\n'
-    "Tools:\n"
-    + "\n".join(f"- {n}{sig}: {desc}" for n, (_, sig, desc) in TOOLS.items())
-)
-
-
-# --------------------------------------------------------------- backends
-class StubLLM:
-    """Scripted fake model: one search_docs call, then a final answer."""
-
-    name = "stub"
-    new_tokens = 0
-    gen_seconds = 0.0
-
-    def chat(self, messages):
-        results = [m["content"] for m in messages if m["content"].startswith("Tool result:")]
-        if not results:
-            return json.dumps({"tool": "search_docs", "args": {"query": messages[1]["content"]}})
-        return json.dumps({"final": "STUB ANSWER (no real model). Tool said: " + results[-1][13:300]})
-
-
-class OpenAICompatLLM:
-    """Any OpenAI-compatible /chat/completions server (vLLM or a hosted API)."""
-
-    def __init__(self, base_url, model, api_key="not-required"):
-        self.base_url, self.model, self.api_key = base_url.rstrip("/"), model, api_key
-        self.name = f"{model} via {self.base_url}"
-        self.new_tokens, self.gen_seconds = 0, 0.0
-
-    def chat(self, messages):
-        import requests
-
-        start = time.perf_counter()
-        reply = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={"model": self.model, "messages": messages, "temperature": 0, "max_tokens": 500},
-            timeout=180,
-        )
-        reply.raise_for_status()
-        data = reply.json()
-        self.gen_seconds += time.perf_counter() - start
-        self.new_tokens += int(data.get("usage", {}).get("completion_tokens", 0))
-        return data["choices"][0]["message"]["content"]
-
-
-class TransformersLLM:
-    """A local model folder run with PyTorch (ROCm on the AMD GPU)."""
-
-    def __init__(self, model_path):
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        self.torch = torch
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, torch_dtype=dtype)
-        self.model = self.model.to(self.device).eval()
-        where = torch.cuda.get_device_name(0) if self.device == "cuda" else "CPU"
-        self.name = f"{Path(model_path).name} on {where}"
-        self.new_tokens, self.gen_seconds = 0, 0.0
-
-    def chat(self, messages):
-        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
-        if self.device == "cuda":
-            self.torch.cuda.synchronize()
-        start = time.perf_counter()
-        with self.torch.no_grad():
-            out = self.model.generate(**inputs, max_new_tokens=400, do_sample=False)
-        if self.device == "cuda":
-            self.torch.cuda.synchronize()
-        self.gen_seconds += time.perf_counter() - start
-        new = out[0][inputs["input_ids"].shape[1]:]
-        self.new_tokens += int(len(new))
-        return self.tokenizer.decode(new, skip_special_tokens=True)
-
-
-# ------------------------------------------------------------------ agent
+    return {
+        "matches": [
+            {"file": filename, "passage": passage}
+            for score, filename, passage in scored[:int(k)]
+        ]
+    }
 def _parse_json(text):
     """First JSON object in the text (tolerates ```json fences and chatter)."""
     start = text.find("{")
@@ -385,11 +343,54 @@ def _compose_grounded_answer(question, steps, confirm):
     return "\n\n".join(parts)
 
 
+
+def _is_unanswerable_cause_question(question):
+    """Recognize cause questions the saved data cannot answer."""
+    text = str(question).lower()
+
+    asks_why = bool(
+        re.search(r"\bwhy\b|\bwhat caused\b|\broot cause\b", text)
+    )
+    mentions_fault = any(
+        word in text
+        for word in (
+            "motor", "fault", "faulty", "bearing",
+            "shaft", "rotor", "coupling", "imbalance",
+        )
+    )
+    asks_for_evidence = any(
+        word in text
+        for word in (
+            "flag", "screen", "score", "precision", "recall",
+            "accuracy", "f1", "how many", "rows", "check",
+            "inspect", "inspection", "maintenance",
+        )
+    )
+
+    return asks_why and mentions_fault and not asks_for_evidence
+
 def plan_and_answer(question, recording_hint=""):
     """Answer from the repo files with a keyword planner (no invented numbers)."""
     begin = time.perf_counter()
     lowered = str(question).lower()
     recording = _pick_recording(question, recording_hint)
+    if _is_unanswerable_cause_question(question):
+        return {
+            "question": question,
+            "answer": (
+                "I don't know the exact cause of the motor fault "
+                "based on the available information. TwinMind's screening "
+                "flags unusual readings, but those flags alone cannot "
+                "confirm a physical fault or establish its cause. "
+                "The motor and sensor readings need to be verified by "
+                "a qualified technician.\n\n"
+                + DISCLAIMER
+            ),
+            "tools_used": [],
+            "trace": [],
+            "backend": "grounded tools (saved AMD reports)",
+            "seconds": round(time.perf_counter() - begin, 2),
+        }
     confirm = any(
         token in lowered
         for token in ("definitely", "confirm this", "guaranteed", "prove that", "diagnos")
@@ -534,3 +535,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

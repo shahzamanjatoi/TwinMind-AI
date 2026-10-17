@@ -1,0 +1,5 @@
+Faulted bearing - recommended checks (from the TwinMind app):
+Pattern is consistent with a bearing fault.
+Inspect the bearing for wear, damage, and lubrication condition.
+Check bearing temperature and noise.
+Plan replacement before the fault progresses.

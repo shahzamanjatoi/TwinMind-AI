@@ -1,0 +1,5 @@
+Imbalance - recommended checks (from the TwinMind app):
+Pattern is consistent with rotor imbalance.
+Inspect the rotor for deposits, missing balance weights, or damage.
+Plan balancing at the next scheduled stop.
+Re-measure vibration after correction.

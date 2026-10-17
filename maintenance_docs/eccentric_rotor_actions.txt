@@ -1,0 +1,5 @@
+Eccentric rotor - recommended checks (from the TwinMind app):
+Pattern is consistent with an eccentric rotor.
+Check the air gap and rotor seating.
+Inspect rotor mounting and bearings for wear.
+Compare against baseline vibration after inspection.
