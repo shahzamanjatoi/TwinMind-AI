@@ -71,6 +71,50 @@ def flagged_summary(recording):
     }
 
 
+def flagged_comparison():
+    """Compare flagged-row counts across all saved recordings."""
+    df = pd.read_csv(SCREENING_CSV)
+
+    required = {"source_file", "flagged_for_review", "screening_score"}
+    missing = required - set(df.columns)
+    if missing:
+        return {"error": f"Missing required screening columns: {sorted(missing)}"}
+
+    flagged_values = (
+        df["flagged_for_review"].astype(str).str.lower().isin(
+            ["true", "1", "yes"]
+        )
+    )
+
+    results = []
+    for name, part in df.groupby("source_file", sort=True):
+        mask = flagged_values.loc[part.index]
+        rows = int(len(part))
+        count = int(mask.sum())
+        results.append({
+            "recording": str(name),
+            "rows": rows,
+            "flagged": count,
+            "flagged_percent": round(100.0 * count / rows, 2) if rows else 0.0,
+        })
+
+    if not results:
+        return {"error": "No saved screening recordings were found."}
+
+    highest_count = max(item["flagged"] for item in results)
+    highest = [
+        item for item in results if item["flagged"] == highest_count
+    ]
+    results.sort(key=lambda item: (-item["flagged"], item["recording"]))
+
+    return {
+        "recordings_compared": len(results),
+        "highest_count": highest_count,
+        "highest": highest,
+        "all_recordings": results,
+    }
+
+
 def model_reliability(condition="all"):
     report = pd.read_csv(REPORT_CSV, index_col=0)
     matrix = pd.read_csv(CONFUSION_CSV).set_index("true_status")
@@ -172,6 +216,32 @@ def search_docs(query, k=2):
             for score, filename, passage in scored[:int(k)]
         ]
     }
+# Registry for the existing TwinMind agent tools.
+# The first tuple item is the callable used by the agent.
+TOOLS = {
+    "list_recordings": (
+        list_recordings,
+        "List available saved screening recordings.",
+    ),
+    "flagged_summary": (
+        flagged_summary,
+        "Summarize flagged rows for a saved recording.",
+    ),
+    "model_reliability": (
+        model_reliability,
+        "Report saved model reliability metrics.",
+    ),
+    "flagged_comparison": (
+        flagged_comparison,
+        "Compare flagged-row counts across all saved recordings.",
+    ),
+    "search_docs": (
+        search_docs,
+        "Search available maintenance documentation.",
+    ),
+}
+
+
 def _parse_json(text):
     """First JSON object in the text (tolerates ```json fences and chatter)."""
     start = text.find("{")
@@ -281,6 +351,28 @@ def _compose_grounded_answer(question, steps, confirm):
         preview = ", ".join(names[:8])
         extra = f" and {len(names) - 8} more" if len(names) > 8 else ""
         parts.append(f"Saved AMD screening results cover {len(names)} recordings{extra}: {preview}.")
+
+    comparison = by_name.get("flagged_comparison") or {}
+    if comparison.get("error"):
+        parts.append(str(comparison["error"]))
+    elif comparison.get("highest"):
+        winners = comparison["highest"]
+        winner_text = "; ".join(
+            f"{item['recording']}: {item['flagged']:,} of "
+            f"{item['rows']:,} rows ({item['flagged_percent']}%)"
+            for item in winners
+        )
+        parts.append(
+            f"Compared flagged-row counts across "
+            f"{comparison['recordings_compared']} recordings. "
+            f"Highest flagged-row count: {winner_text}."
+        )
+        parts.append("Comparison of all recordings:")
+        for item in comparison.get("all_recordings", []):
+            parts.append(
+                f"- {item['recording']}: {item['flagged']:,} of "
+                f"{item['rows']:,} rows ({item['flagged_percent']}%) flagged."
+            )
 
     flagged = by_name.get("flagged_summary") or {}
     if flagged.get("error"):
@@ -433,22 +525,37 @@ def plan_and_answer(question, recording_hint=""):
         )
     )
 
+    wants_comparison = any(
+        phrase in lowered
+        for phrase in (
+            "highest number of flagged",
+            "highest flagged",
+            "most flagged",
+            "most rows flagged",
+            "which recording has the highest",
+            "which recording has the most",
+        )
+    )
+
     planned = []
-    if wants_list:
-        planned.append(("list_recordings", {}))
-    if wants_flag and recording:
-        planned.append(("flagged_summary", {"recording": recording}))
-    elif wants_flag and not recording and not wants_list:
-        planned.append(("list_recordings", {}))
-    if wants_rel:
-        planned.append(("model_reliability", {"condition": _pick_condition(question)}))
-    if wants_docs:
-        planned.append(("search_docs", {"query": question}))
-    if not planned and recording:
-        planned.append(("flagged_summary", {"recording": recording}))
-        planned.append(("search_docs", {"query": question}))
-    if not planned:
-        planned.append(("list_recordings", {}))
+    if wants_comparison:
+        planned.append(("flagged_comparison", {}))
+    else:
+        if wants_list:
+            planned.append(("list_recordings", {}))
+        if wants_flag and recording:
+            planned.append(("flagged_summary", {"recording": recording}))
+        elif wants_flag and not recording and not wants_list:
+            planned.append(("list_recordings", {}))
+        if wants_rel:
+            planned.append(("model_reliability", {"condition": _pick_condition(question)}))
+        if wants_docs:
+            planned.append(("search_docs", {"query": question}))
+        if not planned and recording:
+            planned.append(("flagged_summary", {"recording": recording}))
+            planned.append(("search_docs", {"query": question}))
+        if not planned:
+            planned.append(("list_recordings", {}))
 
     # Preserve order, drop duplicate tool names so a briefing stays short.
     seen, steps = set(), []
