@@ -57,7 +57,7 @@ st.set_page_config(
     page_title=APP_TITLE,
     page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # Shared Plotly theme (white and blue enterprise look)
@@ -527,7 +527,7 @@ def load_saved_metrics():
 
 
 # ============================================================
-# 7. STYLING, HEADER AND TOP NAVIGATION
+# 7. STYLING AND HEADER (white and blue enterprise theme)
 # ============================================================
 
 def render_html(markup: str):
@@ -537,18 +537,6 @@ def render_html(markup: str):
 
 
 inject_theme()
-
-# Hide the sidebar completely: all controls live on the main dashboard.
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebar"],
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 render_hero()
 
@@ -622,50 +610,37 @@ default_index = next(
     ),
 )
 
-select_col, _spacer_col = st.columns([1, 1])
-with select_col:
+with st.sidebar:
+    st.header("Project status")
+    if gpu_available:
+        st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
+    else:
+        st.info(f"Compute: CPU ({gpu_backend})")
+    st.caption(
+        "The fault classifier is a scikit-learn model and runs on the CPU. "
+        "The GPU is used by the live screening in the AMD GPU section. The "
+        "Assistant section reads the saved AMD screening reports."
+    )
+    st.success(f"Model found: {model_path.name}")
+
+    st.divider()
+    st.write("**Required model features**")
+    with st.expander("View feature names"):
+        for feature in model_info["feature_columns"]:
+            st.write(f"- `{feature}`")
+
+    if data_directory is not None:
+        st.success("Dataset directory found")
+        st.caption(f"Dataset: {data_directory.name}")
+        with st.expander("View dataset location"):
+            st.code(str(data_directory), language=None)
+
     selected_recording_name = st.selectbox(
         "Select recording", recording_names, index=default_index
     )
 
 # Top navigation: the nine sections as tabs on the main page.
 tabs = st.tabs(TAB_NAMES)
-
-def render_status():
-    with st.expander("Project status and model details"):
-        status_compute, status_model, status_data = st.columns(3)
-
-        with status_compute:
-            st.markdown("**Compute**")
-            if gpu_available:
-                st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
-            else:
-                st.info(f"Compute: CPU ({gpu_backend})")
-
-        with status_model:
-            st.markdown("**Model**")
-            st.success(f"Model found: {model_path.name}")
-
-        with status_data:
-            st.markdown("**Dataset**")
-            if data_directory is not None:
-                st.success("Dataset directory found")
-                st.caption(f"Dataset: {data_directory.name}")
-            else:
-                st.info("Using uploaded recordings")
-
-        st.caption(
-            "The fault classifier is a scikit-learn model and runs on the CPU. "
-            "The GPU is used by the live screening in the AMD GPU section. The "
-            "Assistant section reads the saved AMD screening reports."
-        )
-
-        st.markdown("**Required model features**")
-        st.markdown("  ".join(f"`{f}`" for f in model_info["feature_columns"]))
-
-        if data_directory is not None:
-            st.markdown("**Dataset location**")
-            st.code(str(data_directory), language=None)
 
 raw_df = recordings[selected_recording_name].copy()
 
@@ -1066,7 +1041,6 @@ with tabs[0]:
         render_shift()
         render_export()
 
-    render_status()
 
 # ------------------------------------------------------------
 # TAB 2: PREDICTIONS
