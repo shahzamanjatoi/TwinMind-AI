@@ -615,11 +615,14 @@ with st.sidebar:
     if gpu_available:
         st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
     else:
-        st.info(f"Compute: CPU ({gpu_backend})")
+        st.info(
+            "**AMD GPU evidence**\n\n"
+            "Radeon Pro W7900D · PyTorch · ROCm\n\n"
+            "Results from the saved run are in the AMD GPU section."
+        )
     st.caption(
         "The fault classifier is a scikit-learn model and runs on the CPU. "
-        "The GPU is used by the live screening in the AMD GPU section. The "
-        "Assistant section reads the saved AMD screening reports."
+        "The Assistant section reads the saved AMD screening reports."
     )
     st.success(f"Model found: {model_path.name}")
 
