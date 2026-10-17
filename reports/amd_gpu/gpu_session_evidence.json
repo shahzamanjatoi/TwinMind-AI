@@ -1,0 +1,18 @@
+{
+  "run_at": "2026-10-15T18:36:17+00:00",
+  "gpu": "AMD Radeon Pro W7900D",
+  "pytorch": "2.13.0+rocm10.0.0",
+  "hip": "7.15.26333",
+  "rows_before_dedupe": 24102,
+  "rows": 21095,
+  "features": 12,
+  "missing_or_non_finite": 217,
+  "threshold": 1.6745,
+  "flagged": 1055,
+  "cpu_median_seconds": 0.002908507362008095,
+  "gpu_median_seconds": 0.000553683377802372,
+  "timing_runs": 20,
+  "excluded_files": [
+    "CombinedFaults_02222025.csv"
+  ]
+}

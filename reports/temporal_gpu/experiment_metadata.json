@@ -1,0 +1,34 @@
+{
+  "project": "TwinMind",
+  "experiment": "chronological holdout within each status, grouped by timestamp",
+  "dataset": "CombinedFaults_02222025.csv",
+  "test_records": 4286,
+  "accuracy": 0.9692020531964536,
+  "macro_f1": 0.9714662184846103,
+  "gpu": "AMD Radeon Pro W7900D",
+  "pytorch": "2.13.0+rocm10.0.0",
+  "rocm_hip": "7.15.26333",
+  "features": [
+    "ch1_bias",
+    "ch1_derivedPk",
+    "ch1_direct",
+    "ch1_directRMS",
+    "ch1_velocityPk",
+    "ch1_velocityRMS",
+    "ch2_bias",
+    "ch2_derivedPk",
+    "ch2_direct",
+    "ch2_directRMS",
+    "ch2_velocityPk",
+    "ch2_velocityRMS",
+    "volts"
+  ],
+  "classes": [
+    "baseline",
+    "bent_shaft",
+    "eccentric_rotor",
+    "faulted_bearing",
+    "faulted_coupling",
+    "imbalance"
+  ]
+}

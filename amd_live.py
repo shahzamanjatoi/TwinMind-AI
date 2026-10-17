@@ -1,7 +1,9 @@
-"""Live AMD GPU screening panel for TwinMind AI.
+"""Live screening panel for TwinMind AI (AMD GPU when available, NumPy on CPU otherwise).
 
-Keep this file next to app.py. If PyTorch is not installed (for example on a
-CPU-only public deployment) the app still works and the panel says so.
+Keep this file next to app.py. The panel works in three situations:
+  * AMD GPU + PyTorch/ROCm   -> times the screening on CPU and GPU
+  * PyTorch without a GPU    -> times the screening on the CPU only
+  * no PyTorch (public cloud) -> runs the same screening with NumPy on the CPU
 
 Scores are standardized with the mean/std saved from the full-dataset GPU run
 (reports/amd_gpu/), so a recording is compared with ALL recordings and the
@@ -10,6 +12,7 @@ standardized against itself and the panel warns about it.
 """
 import json
 import time
+import warnings
 from datetime import datetime
 from pathlib import Path
 
@@ -57,6 +60,7 @@ def _load_reference(feature_columns):
         return None
 
 
+# ------------------------------------------------------------ PyTorch path
 def _screen(x_np, device, reference=None):
     """Impute, standardize and score every row; returns (scores, threshold)."""
     x = torch.as_tensor(x_np, dtype=torch.float32, device=device)
@@ -94,49 +98,77 @@ def _median_time(x_np, device, reference):
     return float(np.median(times))
 
 
+# --------------------------------------------------------------- NumPy path
+def _screen_np(x_np, reference=None):
+    """Same screening as _screen, on the CPU with NumPy; returns (scores, threshold)."""
+    x = np.asarray(x_np, dtype=np.float32)
+    finite = np.isfinite(x)
+    if reference is None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            means = np.nanmean(np.where(finite, x, np.nan), axis=0)
+        x_clean = np.where(finite, x, np.nan_to_num(means, nan=0.0)[None, :])
+        center, scale, threshold = x_clean.mean(axis=0), x_clean.std(axis=0), None
+    else:
+        center, scale, threshold = reference
+        x_clean = np.where(finite, x, center[None, :])
+    scale = np.where(scale > 1e-8, scale, 1.0)
+    scores = np.abs((x_clean - center) / scale).mean(axis=1)
+    if threshold is None:
+        threshold = float(np.quantile(scores, 0.95))
+    return scores, float(threshold)
+
+
+def _median_time_np(x_np, reference):
+    _screen_np(x_np, reference)
+    times = []
+    for _ in range(TIMING_RUNS):
+        start = time.perf_counter()
+        _screen_np(x_np, reference)
+        times.append(time.perf_counter() - start)
+    return float(np.median(times))
+
+
+# --------------------------------------------------------------------- run
 def _run(df, feature_columns, recording_name, gpu_available, gpu_name, backend):
-    features = df.reindex(columns=feature_columns).apply(
-        pd.to_numeric, errors="coerce"
-    )
+    features = df.reindex(columns=feature_columns).apply(pd.to_numeric, errors="coerce")
     x_np = features.to_numpy(dtype=np.float32)
     reference = _load_reference(feature_columns)
 
-    cpu = torch.device("cpu")
-    gpu = torch.device("cuda") if gpu_available else None
-    run_device = gpu if gpu is not None else cpu
+    if torch is None:
+        cpu_time, gpu_time = _median_time_np(x_np, reference), None
+        scores_np, threshold = _screen_np(x_np, reference)
+        device_used = "CPU (NumPy)"
+    else:
+        cpu = torch.device("cpu")
+        gpu = torch.device("cuda") if gpu_available else None
+        run_device = gpu if gpu is not None else cpu
+        cpu_time = _median_time(x_np, cpu, reference)
+        gpu_time = _median_time(x_np, gpu, reference) if gpu is not None else None
+        scores, thr = _screen(x_np, run_device, reference)
+        scores_np, threshold = scores.detach().cpu().numpy(), float(thr.item())
+        device_used = gpu_name if gpu is not None else "CPU"
 
-    cpu_time = _median_time(x_np, cpu, reference)
-    gpu_time = _median_time(x_np, gpu, reference) if gpu is not None else None
-
-    scores, threshold = _screen(x_np, run_device, reference)
-    scores_np = scores.detach().cpu().numpy()
-    flagged = int((scores >= threshold).sum().item())
-    sample_index = (
-        df["sample_index"].to_numpy()
-        if "sample_index" in df.columns
-        else np.arange(len(df))
-    )
+    flagged = int((scores_np >= threshold).sum())
+    sample_index = df["sample_index"].to_numpy() if "sample_index" in df.columns else np.arange(len(df))
     top = (
         pd.DataFrame({"sample_index": sample_index, "screening_score": scores_np})
         .nlargest(5, "screening_score")
         .round(4)
     )
-
     return {
         "run_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "recording": str(recording_name),
         "rows": int(len(x_np)),
         "features": int(x_np.shape[1]),
-        "device_used": gpu_name if gpu is not None else "CPU",
+        "device_used": device_used,
         "backend": backend,
         "standardized_against": (
-            "full-dataset reference (reports/amd_gpu)"
-            if reference is not None
-            else "this recording only"
+            "full-dataset reference (reports/amd_gpu)" if reference is not None else "this recording only"
         ),
         "cpu_median_seconds": cpu_time,
         "gpu_median_seconds": gpu_time,
-        "threshold": float(threshold.item()),
+        "threshold": float(threshold),
         "flagged": flagged,
         "flagged_percent": round(100.0 * flagged / max(1, len(x_np)), 2),
         "top_rows": top,
@@ -145,28 +177,20 @@ def _run(df, feature_columns, recording_name, gpu_available, gpu_name, backend):
 
 def render_live_gpu_screening(df, feature_columns, recording_name):
     """Draw the live screening panel inside a Streamlit tab."""
-    st.subheader("Live GPU screening")
+    st.subheader("Live screening")
     st.caption(
         "Runs the statistical screening on the recording selected in the "
-        "sidebar, right now, and times it on the CPU and (if present) the "
-        "GPU. Timings include copying the data to the device. This is a "
-        "screening heuristic, not a fault diagnosis."
+        "sidebar, right now. Timings include copying the data to the device. "
+        "This is a screening heuristic, not a fault diagnosis."
     )
-
-    if torch is None:
-        st.warning(
-            "PyTorch is not installed in this environment, so live "
-            "screening is unavailable here."
-        )
-        return
 
     available, name, backend = get_gpu_status()
     if available:
         st.success(f"GPU detected: {name} ({backend})")
     else:
         st.info(
-            "No GPU detected in this environment, so only the CPU is timed. "
-            "Run the app on the AMD notebook to measure the AMD GPU."
+            "This deployment has no GPU, so only the CPU is timed. "
+            "The AMD GPU results are recorded below and shown in the demo video."
         )
 
     if _load_reference(feature_columns) is None:
@@ -199,8 +223,8 @@ def render_live_gpu_screening(df, feature_columns, recording_name):
     c1, c2, c3 = st.columns(3)
     c1.metric("Rows screened", f"{result['rows']:,}")
     c2.metric(
-        "Flagged for review",
-        f"{result['flagged']:,} ({result['flagged_percent']}%)",
+        f"Flagged for review ({result['flagged_percent']}%)",
+        f"{result['flagged']:,}",
     )
     c3.metric("Device used", str(result["device_used"]))
 

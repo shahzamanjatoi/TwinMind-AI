@@ -1,0 +1,30 @@
+{
+  "Combined_Baseline1.csv": {
+    "run_at": "2026-10-15T18:44:57+00:00",
+    "recording": "Combined_Baseline1.csv",
+    "rows": 2965,
+    "features": 12,
+    "device_used": "AMD Radeon Pro W7900D",
+    "backend": "ROCm / HIP 7.15.26333",
+    "standardized_against": "full-dataset reference (reports/amd_gpu)",
+    "cpu_median_seconds": 0.0003768559545278549,
+    "gpu_median_seconds": 0.00026627257466316223,
+    "threshold": 1.674708366394043,
+    "flagged": 0,
+    "flagged_percent": 0.0
+  },
+  "Combined_BentShaft.csv": {
+    "run_at": "2026-10-15T18:44:58+00:00",
+    "recording": "Combined_BentShaft.csv",
+    "rows": 2898,
+    "features": 12,
+    "device_used": "AMD Radeon Pro W7900D",
+    "backend": "ROCm / HIP 7.15.26333",
+    "standardized_against": "full-dataset reference (reports/amd_gpu)",
+    "cpu_median_seconds": 0.00038274191319942474,
+    "gpu_median_seconds": 0.000258137471973896,
+    "threshold": 1.674708366394043,
+    "flagged": 914,
+    "flagged_percent": 31.54
+  }
+}

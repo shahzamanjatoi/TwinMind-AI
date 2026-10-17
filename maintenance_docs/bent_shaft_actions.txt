@@ -1,0 +1,4 @@
+﻿Bent shaft - recommended checks (from the TwinMind app):
+Check shaft runout with a dial indicator.
+Inspect for recent impact, overload, or thermal distortion.
+Escalate to engineering before extended operation.

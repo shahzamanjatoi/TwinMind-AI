@@ -41,8 +41,8 @@ class TwinMindInference:
                 f"Preprocessing bundle not found: {PREPROCESS_PATH}"
             )
 
-        # This initial test runs on the local CPU.
-        self.device = torch.device("cpu")
+         # Use the AMD GPU (ROCm) when available, otherwise fall back to CPU.
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         checkpoint = torch.load(
             MODEL_PATH,

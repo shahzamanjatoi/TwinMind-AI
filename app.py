@@ -32,6 +32,16 @@ except Exception:  # noqa: BLE001
         )
 
 
+from twinmind_panels import (
+    SENSOR_LAYOUTS,
+    render_gpu_session_details,
+    render_maintenance_assistant,
+    render_temporal_evaluation,
+    sensor_figure,
+)
+
+from twinmind_theme import inject_theme, render_hero
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # ============================================================
@@ -41,6 +51,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 APP_TITLE = "TwinMind AI"
 BASE_DIR = Path(__file__).resolve().parent
 AMD_DIR = BASE_DIR / "reports" / "amd_gpu"
+TEMPORAL_DIR = BASE_DIR / "reports" / "temporal_gpu"
 
 st.set_page_config(
     page_title=APP_TITLE,
@@ -114,7 +125,7 @@ FAULT_GUIDANCE = {
         "level": "ok",
         "summary": "Vibration pattern matches normal (baseline) operation.",
         "actions": [
-            "No corrective action indicated.",
+            "Majority of samples are consistent with baseline; review any minority fault predictions before treating this as a healthy reference.",
             "Keep routine monitoring and store this recording as a healthy reference.",
         ],
     },
@@ -512,68 +523,9 @@ def render_html(markup: str):
     st.markdown(cleaned, unsafe_allow_html=True)
 
 
-st.markdown(
-    """
-    <style>
-    :root { color-scheme: light !important; }
-    .stApp, [data-testid="stAppViewContainer"] { background: #f5f8fc !important; color: #1e293b !important; }
-    [data-testid="stHeader"] { background: rgba(255, 255, 255, 0.96) !important; }
-    .block-container { max-width: 1600px; padding-top: 1.5rem; padding-bottom: 3rem; }
-    [data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #e2e8f0 !important; box-shadow: 3px 0 16px rgba(15, 23, 42, 0.04) !important; }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span { color: #334155 !important; }
-    h1, h2, h3, h4 { color: #0f172a !important; letter-spacing: -0.02em; }
-    p, li, label { color: #334155; }
-    [data-testid="stCaptionContainer"] { color: #64748b !important; }
-    [data-testid="stMetric"] { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 14px; padding: 18px; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04); }
-    [data-testid="stMetricLabel"] { color: #64748b !important; }
-    [data-testid="stMetricValue"] { color: #0f172a !important; }
-    [data-testid="stMetricDelta"] { color: #059669 !important; }
-    div[data-testid="stAlert"] { border-radius: 10px; }
-    .stButton > button, [data-testid="stDownloadButton"] > button { background: #ffffff !important; color: #1d4ed8 !important; border: 1px solid #bfdbfe !important; border-radius: 9px; font-weight: 600; transition: all 0.2s ease; }
-    .stButton > button[kind="primary"] { background: #2563eb !important; color: #ffffff !important; border-color: #2563eb !important; }
-    .stButton > button:hover, [data-testid="stDownloadButton"] > button:hover { border-color: #2563eb !important; box-shadow: 0 3px 10px rgba(37, 99, 235, 0.12); }
-    .stButton > button:focus-visible, [data-testid="stDownloadButton"] > button:focus-visible,
-    [data-baseweb="select"] > div:focus-within, [data-baseweb="input"] > div:focus-within { outline: 2px solid #2563eb; outline-offset: 2px; }
-    [data-baseweb="select"] > div, [data-baseweb="input"] > div, [data-baseweb="textarea"] { background: #ffffff !important; border-color: #cbd5e1 !important; border-radius: 8px; color: #1e293b !important; }
-    [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 8px; border-bottom: 1px solid #e2e8f0; }
-    [data-testid="stTabs"] button[data-baseweb="tab"] { color: #64748b !important; padding: 10px 14px; }
-    [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] { color: #1d4ed8 !important; border-bottom: 3px solid #2563eb !important; background: #eff6ff !important; border-radius: 8px 8px 0 0; }
-    [data-testid="stTabs"] button[data-baseweb="tab"]:hover { color: #2563eb !important; }
-    [data-testid="stExpander"] { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 10px; }
-    [data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { background: #ffffff !important; color: #334155 !important; }
-    [data-testid="stPlotlyChart"], [data-testid="stDataFrame"], [data-testid="stTable"] { background: #ffffff !important; border: 1px solid #e2e8f0 !important; border-radius: 12px; overflow: hidden; }
-    [data-testid="stTable"] table, [data-testid="stTable"] th, [data-testid="stTable"] td { background: #ffffff !important; color: #334155 !important; border-color: #e2e8f0 !important; }
-    hr { border-color: #e2e8f0 !important; opacity: 1; }
-    .tm-hero { background: linear-gradient(115deg, #ffffff 0%, #eff6ff 100%) !important; border: 1px solid #dbeafe !important; border-left: 5px solid #2563eb !important; border-radius: 16px; padding: 24px 26px; margin: 0.6rem 0 1.1rem; box-shadow: 0 6px 22px rgba(37, 99, 235, 0.06); }
-    .tm-eyebrow { color: #2563eb !important; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 8px; }
-    .tm-title { color: #0f172a !important; font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 750; line-height: 1.15; margin: 0 0 9px; }
-    .tm-subtitle { color: #475569 !important; font-size: 1rem; line-height: 1.6; margin: 0; }
-    .tm-disclaimer { color: #475569 !important; background: #eff6ff !important; border: 1px solid #dbeafe !important; border-radius: 10px; padding: 12px 15px; margin: 0.5rem 0 1.5rem; font-size: 0.88rem; line-height: 1.55; }
-    @media (max-width: 768px) { .block-container { padding: 1rem; } .tm-hero { padding: 19px; } }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+inject_theme()
 
-render_html(
-    """
-    <section class="tm-hero">
-        <div class="tm-eyebrow">Industrial Intelligence / Digital Twin</div>
-        <div class="tm-title">TwinMind AI</div>
-        <p class="tm-subtitle">
-            Motor condition monitoring, sensor exploration, fault classification,
-            and historical-data analysis in one engineering workspace.
-        </p>
-    </section>
-    <div class="tm-disclaimer">
-        <strong>Prototype notice:</strong>
-        This application analyzes historical sensor recordings and estimates
-        condition classes. It is not connected to a live motor and does not
-        independently confirm physical faults or provide safety-critical
-        predictive maintenance.
-    </div>
-    """
-)
+render_hero()
 
 
 # ============================================================
@@ -591,7 +543,8 @@ with st.sidebar:
         st.info(f"Compute: CPU ({gpu_backend})")
     st.caption(
         "The fault classifier is a scikit-learn model and runs on the CPU. "
-        "The GPU is used by the live screening in the 'AMD GPU Evidence' tab."
+        "The GPU is used by the live screening in the AMD GPU section. The "
+        "Assistant section reads the saved AMD screening reports."
     )
 
     if model_path:
@@ -1008,18 +961,18 @@ st.caption(
 # 11. DASHBOARD TABS
 # ============================================================
 
-tabs = st.tabs(
-    [
-        "Overview",
-        "Predictions",
-        "Sensor Explorer",
-        "Anomaly Explorer",
-        "Explainability",
-        "What-if Simulator",
-        "Evaluation",
-        "AMD GPU Evidence",
-    ]
-)
+TAB_NAMES = [
+    "Overview",
+    "Predictions",
+    "Sensor Explorer",
+    "Anomaly Explorer",
+    "Explainability",
+    "What-if Simulator",
+    "Evaluation",
+    "Assistant",
+    "AMD GPU",
+]
+tabs = st.tabs(TAB_NAMES)
 
 # ------------------------------------------------------------
 # TAB 1: OVERVIEW
@@ -1160,14 +1113,19 @@ with tabs[2]:
         )
 
         if chosen_sensors:
-            sensor_long = selected_df[["sample_index"] + chosen_sensors].melt(
-                id_vars="sample_index", var_name="Sensor", value_name="Value"
+            sensor_layout = st.radio(
+                "Chart layout",
+                SENSOR_LAYOUTS,
+                horizontal=True,
+                key="sensor_layout",
+                help="Sensors have very different scales (for example ch1_bias "
+                "is near -12). Separate panels or z-score normalization keep "
+                "every signal readable.",
             )
-            fig = px.line(
-                sensor_long, x="sample_index", y="Value", color="Sensor",
-                title="Sensor signals across samples",
+            fig, chart_height = sensor_figure(
+                selected_df, chosen_sensors, sensor_layout
             )
-            style_chart(fig, height=480)
+            style_chart(fig, height=chart_height)
             st.plotly_chart(fig, width="stretch")
 
         st.subheader("Sensor statistics")
@@ -1447,9 +1405,14 @@ with tabs[5]:
 
 with tabs[6]:
     st.subheader("Model Evaluation")
+    render_temporal_evaluation(TEMPORAL_DIR)
+    st.divider()
+    st.subheader("Per-recording agreement check")
     st.write(
         "The reference label below is inferred from the recording filename. "
-        "It is not an independent, sample-by-sample engineering diagnosis."
+        "It is not an independent, sample-by-sample engineering diagnosis. "
+        "A single recording contains one class, so high agreement here is "
+        "expected and is not a generalization result."
     )
 
     labelled_df = selected_df[selected_df["actual_label"] != "unknown"].copy()
@@ -1507,10 +1470,22 @@ with tabs[6]:
     )
 
 # ------------------------------------------------------------
-# TAB 8: AMD GPU EVIDENCE
+# TAB 8: MAINTENANCE ASSISTANT
 # ------------------------------------------------------------
 
 with tabs[7]:
+    render_maintenance_assistant(
+        selected_recording_name,
+        gpu_available,
+        gpu_name,
+        gpu_backend,
+    )
+
+# ------------------------------------------------------------
+# TAB 9: AMD GPU EVIDENCE
+# ------------------------------------------------------------
+
+with tabs[8]:
     render_live_gpu_screening(selected_df, model_features, selected_recording_name)
     st.divider()
     st.subheader("AMD GPU Analysis")
@@ -1552,15 +1527,7 @@ with tabs[7]:
             col2.metric("Features processed", f"{len(amd_features):,}")
             col3.metric("Flagged for review", f"{flagged_count:,}")
 
-            st.markdown("**AMD workload details**")
-            st.write("GPU: AMD Radeon Pro W7900D")
-            st.write("Software: PyTorch with ROCm")
-            st.write("Reported GPU workload time: 0.949 seconds")
-            st.write("Reported screening threshold: 1.7293")
-            st.write(
-                "The original input contained 481 missing or non-finite "
-                "sensor values before imputation."
-            )
+            render_gpu_session_details(AMD_DIR)
 
             # ---------------- Maintenance action workflow ----------------
             st.markdown("**Maintenance Action Workflow**")

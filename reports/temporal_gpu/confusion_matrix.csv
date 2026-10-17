@@ -1,0 +1,7 @@
+true_status,baseline,bent_shaft,eccentric_rotor,faulted_bearing,faulted_coupling,imbalance
+baseline,1220,0,0,0,0,0
+bent_shaft,0,589,0,0,0,0
+eccentric_rotor,61,0,558,0,0,63
+faulted_bearing,0,0,0,482,0,0
+faulted_coupling,8,0,0,0,413,0
+imbalance,0,0,0,0,0,892

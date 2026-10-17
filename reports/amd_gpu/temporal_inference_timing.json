@@ -1,0 +1,22 @@
+{
+  "rows": 21137,
+  "gpu": "AMD Radeon Pro W7900D",
+  "gpu_median_seconds": 0.007233871147036552,
+  "cpu_median_seconds": 0.2027076557278633,
+  "cpu_over_gpu": 28.022016373751015,
+  "label_columns_agree": {
+    "predicted_status": 1.0
+  },
+  "max_abs_diff_numeric": 2.384185791015625e-07,
+  "cpu_threads_default": 64,
+  "cpu_cores": 128,
+  "cpu_median_by_threads_seconds": {
+    "1": 0.10012418124824762,
+    "2": 0.10034516826272011,
+    "4": 0.10017918981611729,
+    "8": 0.10007940232753754,
+    "64": 0.24891218077391386
+  },
+  "best_cpu_median_seconds": 0.10007940232753754,
+  "best_cpu_over_gpu": 13.834833423669199
+}

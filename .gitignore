@@ -30,3 +30,15 @@ chart_theme_snippet.py
 app.py.before*
 app_backup*
 .gitignore.backup-*
+
+*.bak*
+*.zip
+app_after_replacement.py
+app_before_restore.py
+inspect_*.py
+.streamlit/config.before_*.toml
+reports/amd_gpu/_previous_run/
+
+ui_theme.py
+reports/s1_testbed_exploratory_predictions.csv
+assets/twinmind_bg.jpg
