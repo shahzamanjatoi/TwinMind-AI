@@ -57,7 +57,7 @@ st.set_page_config(
     page_title=APP_TITLE,
     page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # Shared Plotly theme (white and blue enterprise look)
@@ -118,6 +118,19 @@ CLASS_LABELS = {
     "imbalance": "Imbalance",
     "unknown": "Unknown",
 }
+
+# Section names for the top navigation (main dashboard, not the sidebar).
+TAB_NAMES = [
+    "Overview",
+    "Predictions",
+    "Sensor Explorer",
+    "Anomaly Explorer",
+    "Explainability",
+    "What-if Simulator",
+    "Evaluation",
+    "Assistant",
+    "AMD GPU",
+]
 
 # Operator-facing guidance for each predicted condition (decision support only).
 FAULT_GUIDANCE = {
@@ -514,7 +527,7 @@ def load_saved_metrics():
 
 
 # ============================================================
-# 7. STYLING AND HEADER (white and blue enterprise theme)
+# 7. STYLING, HEADER AND TOP NAVIGATION
 # ============================================================
 
 def render_html(markup: str):
@@ -525,6 +538,18 @@ def render_html(markup: str):
 
 inject_theme()
 
+# Hide the sidebar completely: all controls live on the main dashboard.
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"],
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 render_hero()
 
 
@@ -533,24 +558,7 @@ render_hero()
 # ============================================================
 
 model_path = find_model_file()
-
-with st.sidebar:
-    st.header("Project status")
-    gpu_available, gpu_name, gpu_backend = get_gpu_status()
-    if gpu_available:
-        st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
-    else:
-        st.info(f"Compute: CPU ({gpu_backend})")
-    st.caption(
-        "The fault classifier is a scikit-learn model and runs on the CPU. "
-        "The GPU is used by the live screening in the AMD GPU section. The "
-        "Assistant section reads the saved AMD screening reports."
-    )
-
-    if model_path:
-        st.success(f"Model found: {model_path.name}")
-    else:
-        st.error("Model file not found.")
+gpu_available, gpu_name, gpu_backend = get_gpu_status()
 
 if model_path is None:
     st.error(
@@ -563,13 +571,6 @@ try:
 except Exception as exc:  # noqa: BLE001
     st.error(f"Could not load the model: {exc}")
     st.stop()
-
-with st.sidebar:
-    st.divider()
-    st.write("**Required model features**")
-    with st.expander("View feature names"):
-        for feature in model_info["feature_columns"]:
-            st.write(f"- `{feature}`")
 
 data_directory = find_data_directory()
 
@@ -585,13 +586,6 @@ if load_errors:
     with st.expander("Dataset loading messages"):
         for filename, message in load_errors.items():
             st.warning(f"{filename}: {message}")
-
-if data_directory is not None:
-    with st.sidebar:
-        st.success("Dataset directory found")
-        st.caption(f"Dataset: {data_directory.name}")
-        with st.expander("View dataset location"):
-            st.code(str(data_directory), language=None)
 
 if not recordings:
     st.info(
@@ -614,7 +608,7 @@ if not recordings:
 
 
 # ============================================================
-# 9. RECORDING SELECTION AND SUMMARY
+# 9. RECORDING SELECTION, STATUS AND SUMMARY
 # ============================================================
 
 recording_names = list(recordings.keys())
@@ -628,10 +622,50 @@ default_index = next(
     ),
 )
 
-with st.sidebar:
+select_col, _spacer_col = st.columns([1, 1])
+with select_col:
     selected_recording_name = st.selectbox(
         "Select recording", recording_names, index=default_index
     )
+
+# Top navigation: the nine sections as tabs on the main page.
+tabs = st.tabs(TAB_NAMES)
+
+def render_status():
+    with st.expander("Project status and model details"):
+        status_compute, status_model, status_data = st.columns(3)
+
+        with status_compute:
+            st.markdown("**Compute**")
+            if gpu_available:
+                st.success(f"GPU detected: {gpu_name} ({gpu_backend})")
+            else:
+                st.info(f"Compute: CPU ({gpu_backend})")
+
+        with status_model:
+            st.markdown("**Model**")
+            st.success(f"Model found: {model_path.name}")
+
+        with status_data:
+            st.markdown("**Dataset**")
+            if data_directory is not None:
+                st.success("Dataset directory found")
+                st.caption(f"Dataset: {data_directory.name}")
+            else:
+                st.info("Using uploaded recordings")
+
+        st.caption(
+            "The fault classifier is a scikit-learn model and runs on the CPU. "
+            "The GPU is used by the live screening in the AMD GPU section. The "
+            "Assistant section reads the saved AMD screening reports."
+        )
+
+        st.markdown("**Required model features**")
+        st.markdown("  ".join(f"`{f}`" for f in model_info["feature_columns"]))
+
+        if data_directory is not None:
+            st.markdown("**Dataset location**")
+            st.code(str(data_directory), language=None)
 
 raw_df = recordings[selected_recording_name].copy()
 
@@ -668,20 +702,23 @@ missing_sensor_percent = (
     100.0 * missing_sensor_cells / total_sensor_cells if total_sensor_cells else 0.0
 )
 
-if missing_sensor_cells:
-    st.warning(
-        f"Input quality warning: {missing_sensor_cells:,} missing or "
-        f"non-numeric sensor values ({missing_sensor_percent:.2f}% of "
-        "required sensor values). The model pipeline may impute these "
-        "values, so predictions may be less reliable."
-    )
-else:
-    st.success(
-        "Input quality check: all required sensor values are present and numeric."
-    )
+def render_quality():
+    if missing_sensor_cells:
+        st.warning(
+            f"Input quality warning: {missing_sensor_cells:,} missing or "
+            f"non-numeric sensor values ({missing_sensor_percent:.2f}% of "
+            "required sensor values). The model pipeline may impute these "
+            "values, so predictions may be less reliable."
+        )
+    else:
+        st.success(
+            "Input quality check: all required sensor values are present and numeric."
+        )
 
 # Distribution-shift screening against the other recordings (heuristic only).
+# The calculation always runs because the review flag below depends on it.
 shifted_features = []
+shift_results = []
 reference_frames = []
 
 for reference_name, reference_df in recordings.items():
@@ -698,7 +735,6 @@ if reference_frames:
     lower_bounds = reference_data.quantile(0.01)
     upper_bounds = reference_data.quantile(0.99)
 
-    shift_results = []
     for feature in model_features:
         reference_values = reference_data[feature].dropna()
         current_values = selected_features[feature].dropna()
@@ -711,174 +747,177 @@ if reference_frames:
         shift_results.append((feature, 100.0 * float(outside.mean())))
 
     shifted_features = [(f, p) for f, p in shift_results if p > 20.0]
+    shifted_features.sort(key=lambda item: item[1], reverse=True)
 
-    st.subheader("Distribution-shift screening")
-    st.caption(
-        "Compares this recording with other available recordings. "
-        "The 1st-99th percentile bounds and 20% trigger are heuristic "
-        "screening settings, not validated operating limits."
-    )
+def render_shift():
+    if reference_frames:
+        st.subheader("Distribution-shift screening")
+        st.caption(
+            "Compares this recording with other available recordings. "
+            "The 1st-99th percentile bounds and 20% trigger are heuristic "
+            "screening settings, not validated operating limits."
+        )
 
-    shift_table = pd.DataFrame(
-        shift_results, columns=["Sensor feature", "Outside reference range (%)"]
-    )
-    if not shift_table.empty:
-        shift_table["Outside reference range (%)"] = shift_table[
-            "Outside reference range (%)"
-        ].round(2)
-        shift_table["Screening result"] = shift_table[
-            "Outside reference range (%)"
-        ].apply(lambda v: "Review" if v > 20.0 else "Below threshold")
-        shift_table = shift_table.sort_values(
-            "Outside reference range (%)", ascending=False
+        shift_table = pd.DataFrame(
+            shift_results, columns=["Sensor feature", "Outside reference range (%)"]
         )
-        st.markdown("**Sensor shift details**")
-        st.dataframe(shift_table, width="stretch", hide_index=True)
+        if not shift_table.empty:
+            shift_table["Outside reference range (%)"] = shift_table[
+                "Outside reference range (%)"
+            ].round(2)
+            shift_table["Screening result"] = shift_table[
+                "Outside reference range (%)"
+            ].apply(lambda v: "Review" if v > 20.0 else "Below threshold")
+            shift_table = shift_table.sort_values(
+                "Outside reference range (%)", ascending=False
+            )
+            st.markdown("**Sensor shift details**")
+            st.dataframe(shift_table, width="stretch", hide_index=True)
 
-    if shifted_features:
-        shifted_features.sort(key=lambda item: item[1], reverse=True)
-        details = "; ".join(
-            f"{f}: {p:.1f}% outside reference range" for f, p in shifted_features[:5]
-        )
-        st.warning(
-            "Potential sensor distribution shift detected. "
-            + details
-            + ". Review sensor scaling, operating conditions, and data "
-            "quality before interpreting model predictions."
-        )
-    elif shift_results:
-        st.info(
-            "No strong distribution shift was flagged by this screening "
-            "check. This does not establish that the model is reliable "
-            "for this recording."
-        )
+        if shifted_features:
+            details = "; ".join(
+                f"{f}: {p:.1f}% outside reference range" for f, p in shifted_features[:5]
+            )
+            st.warning(
+                "Potential sensor distribution shift detected. "
+                + details
+                + ". Review sensor scaling, operating conditions, and data "
+                "quality before interpreting model predictions."
+            )
+        elif shift_results:
+            st.info(
+                "No strong distribution shift was flagged by this screening "
+                "check. This does not establish that the model is reliable "
+                "for this recording."
+            )
+        else:
+            st.info(
+                "Distribution shift could not be assessed because there were "
+                "not enough valid reference or selected sensor values."
+            )
     else:
         st.info(
-            "Distribution shift could not be assessed because there were "
-            "not enough valid reference or selected sensor values."
+            "Distribution shift could not be assessed because no other "
+            "reference recordings are available."
         )
-else:
-    st.info(
-        "Distribution shift could not be assessed because no other "
-        "reference recordings are available."
-    )
 
 # ------------------------------------------------------------
 # Export real classifier results for the Evolus assistant
 # ------------------------------------------------------------
 
-st.subheader("Export for Evolus")
-st.caption(
-    "Export real predictions and sensor summaries for the TwinMind "
-    "Industrial Assistant. This is decision support, not a confirmed "
-    "physical diagnosis."
-)
+def render_export():
+    st.subheader("Export for Evolus")
+    st.caption(
+        "Export real predictions and sensor summaries for the TwinMind "
+        "Industrial Assistant. This is decision support, not a confirmed "
+        "physical diagnosis."
+    )
 
+    def _export_number(value):
+        return None if pd.isna(value) else float(value)
 
-def _export_number(value):
-    return None if pd.isna(value) else float(value)
+    export_features = [f for f in model_features if f in selected_df.columns]
+    export_columns = [
+        c
+        for c in ["sample_index", *export_features, "predicted_label", "prediction_confidence"]
+        if c in selected_df.columns
+    ]
 
-
-export_features = [f for f in model_features if f in selected_df.columns]
-export_columns = [
-    c
-    for c in ["sample_index", *export_features, "predicted_label", "prediction_confidence"]
-    if c in selected_df.columns
-]
-
-feature_summary = {}
-for feature in export_features:
-    values = pd.to_numeric(selected_df[feature], errors="coerce")
-    valid = values.dropna()
-    feature_summary[feature] = {
-        "min": _export_number(valid.min()) if not valid.empty else None,
-        "median": _export_number(valid.median()) if not valid.empty else None,
-        "max": _export_number(valid.max()) if not valid.empty else None,
-        "missing_or_non_numeric": int(values.isna().sum()),
-    }
-
-prediction_distribution = {
-    str(label): int(count)
-    for label, count in selected_df["predicted_label"].value_counts(dropna=False).items()
-}
-
-confidence_summary = None
-if "prediction_confidence" in selected_df.columns:
-    conf_values = pd.to_numeric(
-        selected_df["prediction_confidence"], errors="coerce"
-    ).dropna()
-    if not conf_values.empty:
-        confidence_summary = {
-            "mean_model_score": float(conf_values.mean()),
-            "note": "Model score, not a guarantee of correctness or a calibrated probability.",
+    feature_summary = {}
+    for feature in export_features:
+        values = pd.to_numeric(selected_df[feature], errors="coerce")
+        valid = values.dropna()
+        feature_summary[feature] = {
+            "min": _export_number(valid.min()) if not valid.empty else None,
+            "median": _export_number(valid.median()) if not valid.empty else None,
+            "max": _export_number(valid.max()) if not valid.empty else None,
+            "missing_or_non_numeric": int(values.isna().sum()),
         }
 
-sample_json = selected_df[export_columns].head(5).to_json(orient="records")
+    prediction_distribution = {
+        str(label): int(count)
+        for label, count in selected_df["predicted_label"].value_counts(dropna=False).items()
+    }
 
-evolus_report = {
-    "project": "TwinMind AI",
-    "recording": str(selected_recording_name),
-    "samples_analyzed": int(len(selected_df)),
-    "model_features": export_features,
-    "most_frequent_prediction": str(most_frequent_prediction),
-    "prediction_distribution": prediction_distribution,
-    "filename_label_inferred_not_verified": str(actual_label),
-    "input_quality": {
-        "missing_or_non_numeric_cells": int(missing_sensor_cells),
-        "total_required_sensor_cells": int(total_sensor_cells),
-        "missing_percent": round(float(missing_sensor_percent), 3),
-        "missing_by_feature": {
-            str(f): int(c) for f, c in missing_cells_per_feature.items()
+    confidence_summary = None
+    if "prediction_confidence" in selected_df.columns:
+        conf_values = pd.to_numeric(
+            selected_df["prediction_confidence"], errors="coerce"
+        ).dropna()
+        if not conf_values.empty:
+            confidence_summary = {
+                "mean_model_score": float(conf_values.mean()),
+                "note": "Model score, not a guarantee of correctness or a calibrated probability.",
+            }
+
+    sample_json = selected_df[export_columns].head(5).to_json(orient="records")
+
+    evolus_report = {
+        "project": "TwinMind AI",
+        "recording": str(selected_recording_name),
+        "samples_analyzed": int(len(selected_df)),
+        "model_features": export_features,
+        "most_frequent_prediction": str(most_frequent_prediction),
+        "prediction_distribution": prediction_distribution,
+        "filename_label_inferred_not_verified": str(actual_label),
+        "input_quality": {
+            "missing_or_non_numeric_cells": int(missing_sensor_cells),
+            "total_required_sensor_cells": int(total_sensor_cells),
+            "missing_percent": round(float(missing_sensor_percent), 3),
+            "missing_by_feature": {
+                str(f): int(c) for f, c in missing_cells_per_feature.items()
+            },
         },
-    },
-    "sensor_feature_summary": feature_summary,
-    "confidence_summary": confidence_summary,
-    "sample_predictions_first_5_rows": json.loads(sample_json),
-    "limitations": [
-        "Historical recording; not live machine monitoring.",
-        "Classifier predictions are estimates, not confirmed faults.",
-        "Filename label is inferred from the filename, not independently verified.",
-        "Feature summaries describe this recording, not manufacturer safety limits.",
-        "Only the first five sample predictions are included in this export.",
-    ],
-}
+        "sensor_feature_summary": feature_summary,
+        "confidence_summary": confidence_summary,
+        "sample_predictions_first_5_rows": json.loads(sample_json),
+        "limitations": [
+            "Historical recording; not live machine monitoring.",
+            "Classifier predictions are estimates, not confirmed faults.",
+            "Filename label is inferred from the filename, not independently verified.",
+            "Feature summaries describe this recording, not manufacturer safety limits.",
+            "Only the first five sample predictions are included in this export.",
+        ],
+    }
 
-st.download_button(
-    label="Download Evolus report (JSON)",
-    data=json.dumps(evolus_report, indent=2, ensure_ascii=False),
-    file_name="twinmind_evolus_report.json",
-    mime="application/json",
-    key="download_evolus_report",
-)
+    st.download_button(
+        label="Download Evolus report (JSON)",
+        data=json.dumps(evolus_report, indent=2, ensure_ascii=False),
+        file_name="twinmind_evolus_report.json",
+        mime="application/json",
+        key="download_evolus_report",
+    )
 
-st.subheader("Recording at a glance")
-st.caption(
-    "Summary for the selected historical recording. Predictions are model "
-    "estimates, not confirmed diagnoses of a physical motor."
-)
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Sensor samples", f"{len(selected_df):,}")
-m2.metric("Model features", len(model_features))
-m3.metric("Missing feature columns", missing_feature_count)
-m4.metric("Most frequent prediction", readable_label(most_frequent_prediction))
+def render_glance():
+    st.subheader("Recording at a glance")
+    st.caption(
+        "Summary for the selected historical recording. Predictions are model "
+        "estimates, not confirmed diagnoses of a physical motor."
+    )
 
-if actual_label != "unknown":
-    if most_frequent_prediction == actual_label:
-        st.success(
-            "The most frequent prediction agrees with the label inferred "
-            "from this recording's filename."
-        )
-    else:
-        st.warning(
-            "The most frequent prediction differs from the filename-based "
-            "label. Investigate the data and model before drawing conclusions."
-        )
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Sensor samples", f"{len(selected_df):,}")
+    m2.metric("Model features", len(model_features))
+    m3.metric("Missing feature columns", missing_feature_count)
+    m4.metric("Most frequent prediction", readable_label(most_frequent_prediction))
 
-st.caption(
-    f"Recording: `{selected_recording_name}` · "
-    f"Filename-based label: **{readable_label(actual_label)}**"
-)
+    if actual_label != "unknown":
+        if most_frequent_prediction == actual_label:
+            st.success(
+                "The most frequent prediction agrees with the label inferred "
+                "from this recording's filename."
+            )
+        else:
+            st.warning(
+                "The most frequent prediction differs from the filename-based "
+                "label. Investigate the data and model before drawing conclusions."
+            )
+
+    st.caption(
+        f"Recording: `{selected_recording_name}` · "
+        f"Filename-based label: **{readable_label(actual_label)}**"
+    )
 
 
 # ============================================================
@@ -931,54 +970,44 @@ needs_review = (
     or bool(shifted_features)
 )
 
-st.subheader("Diagnosis and recommended action")
-d1, d2, d3 = st.columns(3)
-d1.metric("Detected condition", readable_label(most_frequent_prediction))
-d2.metric("Samples agreeing", f"{top_share:.1f}%")
-d3.metric("Mean model score", f"{mean_conf * 100:.1f}%" if mean_conf is not None else "n/a")
+def render_diagnosis():
+    st.subheader("Diagnosis and recommended action")
+    d1, d2, d3 = st.columns(3)
+    d1.metric("Detected condition", readable_label(most_frequent_prediction))
+    d2.metric("Samples agreeing", f"{top_share:.1f}%")
+    d3.metric("Mean model score", f"{mean_conf * 100:.1f}%" if mean_conf is not None else "n/a")
 
-if guide["level"] == "ok":
-    st.success(guide["summary"])
-else:
-    st.error(f"ALERT: {guide['summary']}")
+    if guide["level"] == "ok":
+        st.success(guide["summary"])
+    else:
+        st.error(f"ALERT: {guide['summary']}")
 
-if needs_review:
-    st.warning(
-        "Human review recommended: low sample agreement, low model score, "
-        "missing sensor values, or a distribution-shift flag was raised."
+    if needs_review:
+        st.warning(
+            "Human review recommended: low sample agreement, low model score, "
+            "missing sensor values, or a distribution-shift flag was raised."
+        )
+
+    st.markdown("**Recommended actions**")
+    for action in guide["actions"]:
+        st.markdown(f"- {action}")
+    st.caption(
+        "Decision support only. A qualified technician must verify any "
+        "suspected fault before maintenance decisions are made."
     )
 
-st.markdown("**Recommended actions**")
-for action in guide["actions"]:
-    st.markdown(f"- {action}")
-st.caption(
-    "Decision support only. A qualified technician must verify any "
-    "suspected fault before maintenance decisions are made."
-)
-
 
 # ============================================================
-# 11. DASHBOARD TABS
+# 11. DASHBOARD SECTIONS (tabs on the main page)
 # ============================================================
-
-TAB_NAMES = [
-    "Overview",
-    "Predictions",
-    "Sensor Explorer",
-    "Anomaly Explorer",
-    "Explainability",
-    "What-if Simulator",
-    "Evaluation",
-    "Assistant",
-    "AMD GPU",
-]
-tabs = st.tabs(TAB_NAMES)
 
 # ------------------------------------------------------------
 # TAB 1: OVERVIEW
 # ------------------------------------------------------------
 
 with tabs[0]:
+    render_glance()
+    render_diagnosis()
     st.subheader("Recording overview")
     left, right = st.columns([1.5, 1])
 
@@ -1031,6 +1060,13 @@ with tabs[0]:
 
     with st.expander("Preview data"):
         st.dataframe(selected_df.head(30), hide_index=True, width="stretch")
+
+    with st.expander("Data quality, distribution shift and Evolus export"):
+        render_quality()
+        render_shift()
+        render_export()
+
+    render_status()
 
 # ------------------------------------------------------------
 # TAB 2: PREDICTIONS
