@@ -2,7 +2,7 @@
 
 Motor condition monitoring and fault classification, with AMD GPU evidence. Built for the AMD Developer Hackathon: ACT III (Intelligent Industry track).
 
-**Live app:** https://twinmind-ai-mx4nkerrxnf8seuhnvb59t.streamlit.app/  |  **Demo video:** [add the video link here]
+**Live app:** https://twinmind-ai-mx4nkerrxnf8seuhnvb59t.streamlit.app/  |  **Demo video:** https://drive.google.com/file/d/1XxCxIjy2ujhU9djjTwWRFCgbIUrDA3um/view?usp=sharing
 
 TwinMind AI is a Streamlit digital-twin workspace for the Bently Nevada System 1 test-rig recordings (UTK-ASL dataset). It covers six motor conditions: baseline, imbalance, bent shaft, eccentric rotor, faulted bearing and faulted coupling. For any recording it checks input quality, screens for distribution shift, classifies every sample, summarizes a diagnosis with recommended inspection steps, and supports a maintenance workflow (review a flagged sample, record an inspection outcome, save a log).
 
