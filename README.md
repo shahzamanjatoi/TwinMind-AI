@@ -51,7 +51,7 @@ The app uses recordings under `data/` if present, otherwise it downloads the pub
 - `src/`: training and diagnostic scripts used while building the scikit-learn classifier
 - `models/`: saved models
 - `reports/amd_gpu/`, `reports/temporal_gpu/`: saved GPU runs, evaluation tables and timing evidence
-- `twinmind_sensor_data/`, `evidence/`: sensor recordings and supporting screenshots
+- `twinmind_sensor_data/`: sensor recordings used by the app
 
 ## Credits
 

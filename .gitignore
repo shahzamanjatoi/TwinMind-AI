@@ -42,3 +42,5 @@ reports/amd_gpu/_previous_run/
 ui_theme.py
 reports/s1_testbed_exploratory_predictions.csv
 assets/twinmind_bg.jpg
+
+evidence/
