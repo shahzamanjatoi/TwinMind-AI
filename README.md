@@ -45,9 +45,13 @@ The app uses recordings under `data/` if present, otherwise it downloads the pub
 - `app.py`, `twinmind_panels.py`, `twinmind_theme.py`: the Streamlit app
 - `amd_live.py`: live screening panel (PyTorch GPU, or NumPy on the CPU)
 - `amd_inference.py`: inference wrapper for the PyTorch temporal model
+- `agent.py`, `maintenance_docs/`, `agent_test.py`: the Assistant section. It answers from the saved results and the maintenance notes with a keyword planner; no language model is called
+- `twinmind_mcp.py`: experimental MCP server that exposes the classifier, recordings and guidance as tools for agent clients (needs `pip install mcp`; the app does not use it)
+- `evaluate_amd_model.py`, `evaluate_holdout.py`: evaluation scripts
+- `src/`: training and diagnostic scripts used while building the scikit-learn classifier
 - `models/`: saved models
 - `reports/amd_gpu/`, `reports/temporal_gpu/`: saved GPU runs, evaluation tables and timing evidence
-- `maintenance_docs/`, `agent.py`: experimental tool-using assistant scaffold, tested only with a stub model and not used by the app
+- `twinmind_sensor_data/`, `evidence/`: sensor recordings and supporting screenshots
 
 ## Credits
 
