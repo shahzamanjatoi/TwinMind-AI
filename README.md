@@ -1,58 +1,193 @@
-# TwinMind AI
+# TwinMind AI — Industrial Motor Intelligence
 
-Motor condition monitoring and fault classification, with AMD GPU evidence. Built for the AMD Developer Hackathon: ACT III (Intelligent Industry track).
+TwinMind AI turns industrial motor sensor recordings into fault classifications, sensor anomaly screening, and practical maintenance guidance. Built for the **AMD Developer Hackathon: ACT III — Intelligent Industry**, it combines a Streamlit dashboard, machine-learning models, sensor-quality checks, and AMD GPU performance evidence.
 
-**Live app:** https://twinmind-ai-mx4nkerrxnf8seuhnvb59t.streamlit.app/  |  **Demo video:** https://drive.google.com/file/d/1XxCxIjy2ujhU9djjTwWRFCgbIUrDA3um/view?usp=sharing
+**Live app:** [Open TwinMind AI](https://twinmind-ai-mx4nkerrxnf8seuhnvb59t.streamlit.app/)  
+**Demo video:** [Watch the project demo](https://drive.google.com/file/d/1XxCxIjy2ujhU9djjTwWRFCgbIUrDA3um/view?usp=sharing)  
+**Source code:** [GitHub repository](https://github.com/shahzamanjatoi/TwinMind-AI)
 
-TwinMind AI is a Streamlit digital-twin workspace for the Bently Nevada System 1 test-rig recordings (UTK-ASL dataset). It covers six motor conditions: baseline, imbalance, bent shaft, eccentric rotor, faulted bearing and faulted coupling. For any recording it checks input quality, screens for distribution shift, classifies every sample, summarizes a diagnosis with recommended inspection steps, and supports a maintenance workflow (review a flagged sample, record an inspection outcome, save a log).
+## The problem
 
-## What runs where
+Industrial motors generate sensor recordings that contain useful information about their condition. Turning those readings into a clear assessment requires analyzing multiple signals, recognizing fault patterns, and deciding what a technician should inspect next.
 
-| Part | Model / method | Where it runs |
+TwinMind AI brings these steps together in one workspace. It helps users examine historical motor recordings, identify potentially abnormal readings, understand classification results, and document maintenance reviews.
+
+## What TwinMind AI does
+
+The application works with recordings from the Bently Nevada System 1 test rig in the UTK-ASL dataset.
+
+It supports six motor conditions:
+
+- Baseline
+- Imbalance
+- Bent shaft
+- Eccentric rotor
+- Faulted bearing
+- Faulted coupling
+
+For an uploaded or selected recording, the application can check input quality, classify sensor samples, screen for unusual sensor patterns, summarize results, and provide inspection guidance. Its maintenance workflow also supports reviewing flagged samples, recording inspection outcomes, and saving a local maintenance log.
+
+## What runs in the system
+
+| Component | Implementation | Execution |
 |---|---|---|
-| Live classifier in the app | scikit-learn pipeline (`models/twinmind_fault_classifier.joblib`, 12 features) | CPU |
-| Temporal classifier | PyTorch network (13 features incl. `volts`) | Trained and evaluated on an AMD GPU |
-| Sensor screening | Standardized score per row against a full-dataset reference | AMD GPU (saved run) and CPU (live panel) |
-| Assistant section | Answers from the saved AMD screening reports; no language model is called | CPU |
+| Interactive dashboard | Streamlit, Plotly | CPU |
+| Live fault classifier | Scikit-learn pipeline, 12 features | CPU |
+| Temporal fault classifier | PyTorch neural network, 13 features | AMD GPU during training and evaluation |
+| Sensor anomaly screening | Standardized sensor scores | CPU in the live panel; AMD GPU in saved benchmarks |
+| Maintenance assistant | Rule-based guidance using saved reports and maintenance notes | CPU |
+| Experimental tool interface | Model, recording, and guidance tools via MCP | Separate experimental server |
 
-## AMD GPU evidence
+The dashboard remains usable without a PyTorch-enabled AMD environment. GPU benchmarking requires a compatible environment with the necessary dependencies.
 
-All GPU work ran in AMD AI Notebooks on an **AMD Radeon Pro W7900D** (PyTorch 2.13.0+rocm10.0.0, ROCm/HIP 7.15.26333). Saved outputs are in `reports/amd_gpu/` and `reports/temporal_gpu/`.
+## AMD GPU execution and evidence
 
-- **Temporal model inference:** 21,137 readings in 7.2 ms on the GPU versus 100.1 ms on the best-tuned CPU setting (13.8x). The default 64-thread CPU run was slower (248.9 ms), so we report the tuned figure. Predicted labels were identical on every row (maximum probability difference 2.4e-7). Timings cover the whole `predict()` call, including preprocessing and data transfer, in a notebook with 128 CPU cores, so treat the ratio as specific to that environment.
-- **Sensor screening:** 21,095 rows (24,102 before removing the duplicate `CombinedFaults_02222025.csv` and repeated rows), 12 features, in 0.55 ms on the GPU versus 2.91 ms on the CPU (5.3x). The threshold is the 95th percentile (1.6745), so about 5% of rows are flagged overall by design: 1,055 rows. Compare recordings with each other, for example 914 of 2,898 Bent Shaft rows (31.54%) are flagged.
+TwinMind AI's GPU experiments were performed in AMD AI Notebooks on an **AMD Radeon Pro W7900D**, using PyTorch 2.13.0 with ROCm 10.0.0 and ROCm/HIP 7.15.26333.
 
-## Results and limits
+The repository includes saved benchmark reports and evaluation results so that the performance claims can be inspected.
 
-- **Temporal model, chronological holdout** (4,286 test records, split by timestamp within each condition): accuracy 96.9%, macro F1 0.971. Weakest class: Eccentric Rotor, recall 81.8% (61 records predicted as baseline and 63 as imbalance). 8 Faulted Coupling records were also predicted as baseline.
-- The holdout comes from one recording file, so it shows generalization over time, not performance on a new motor. Validate on independent motors before any operational use.
-- The app analyzes historical lab recordings, not a live machine. Predictions and screening flags are decision support and never a confirmed diagnosis.
-- Per-recording agreement in the Evaluation tab is expected to be high because each recording holds a single class. It is not a generalization result.
+### Measured performance
 
-## Run it locally
+| Workload | AMD GPU | Tuned CPU | Measured comparison |
+|---|---:|---:|---:|
+| Temporal model inference, 21,137 readings | 7.2 ms | 100.1 ms | 13.8× faster |
+| Sensor screening, 21,095 rows | 0.55 ms | 2.91 ms | 5.3× faster |
+
+The temporal inference benchmark produced identical predicted labels for every row, with a maximum probability difference of \(2.4 \times 10^{-7}\).
+
+These measurements include the relevant prediction pipeline overhead described in the benchmark, including preprocessing and data transfer for temporal inference. They represent a particular notebook environment, not a guaranteed speedup on every machine.
+
+### Model evaluation
+
+The temporal classifier was evaluated on a chronological holdout containing 4,286 records, split by timestamp within each motor condition.
+
+| Metric | Result |
+|---|---:|
+| Accuracy | 96.9% |
+| Macro F1-score | 0.971 |
+| Weakest class recall | 81.8% — Eccentric Rotor |
+
+The evaluation also revealed confusion between Eccentric Rotor and Baseline or Imbalance, along with some Faulted Coupling records classified as Baseline. These errors are important considerations when interpreting predictions.
+
+## Sensor screening and maintenance workflow
+
+The sensor-screening panel uses a standardized score calculated against a reference distribution. Its saved benchmark uses the 95th-percentile threshold, which flags approximately 5% of reference rows by design.
+
+A screening flag indicates that a reading deserves further examination; it does not establish that a component has failed.
+
+The maintenance workflow supports the following process:
+
+1. Select a recording and inspect its sensor readings.
+2. Review fault classifications and potentially unusual samples.
+3. Examine the relevant screening reports and maintenance guidance.
+4. Record the result of an actual inspection.
+5. Save the maintenance outcome in the project's local log.
+
+This workflow is intended to support technician review rather than replace professional inspection or established site-safety procedures.
+
+## How to run TwinMind AI
+
+### Requirements
+
+- Python 3.10 or a compatible Python version for the project's dependencies
+- Git
+- The repository's required Python packages
+- Internet access on the first run if the public recordings need to be downloaded
+
+For AMD GPU execution, use an environment with compatible AMD GPU hardware, drivers, ROCm, and PyTorch. GPU support is not required for the basic CPU dashboard.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/shahzamanjatoi/TwinMind-AI.git
+cd TwinMind-AI
+```
+
+### 2. Create a virtual environment
+
+**Windows PowerShell**
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+**Linux or macOS**
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate          # Windows; on Linux/macOS: source .venv/bin/activate
+source .venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+### 4. Start the dashboard
+
+```bash
 streamlit run app.py
 ```
 
-The app uses recordings under `data/` if present, otherwise it downloads the public recordings from the UTK-ASL repository. PyTorch is optional: without it the live screening panel runs on the CPU with NumPy. To time the GPU, run the app in an environment with PyTorch + ROCm.
+Streamlit will print the local URL. Open it in your browser to use the application.
+
+If the recordings are available under `data/`, the application can use them locally. Otherwise, the project can download the public recordings from the UTK-ASL repository.
+
+For AMD GPU benchmarking, configure PyTorch and ROCm separately according to the target environment.
 
 ## Repository contents
 
-- `app.py`, `twinmind_panels.py`, `twinmind_theme.py`: the Streamlit app
-- `amd_live.py`: live screening panel (PyTorch GPU, or NumPy on the CPU)
-- `amd_inference.py`: inference wrapper for the PyTorch temporal model
-- `agent.py`, `maintenance_docs/`, `agent_test.py`: the Assistant section. It answers from the saved results and the maintenance notes with a keyword planner; no language model is called
-- `twinmind_mcp.py`: experimental MCP server that exposes the classifier, recordings and guidance as tools for agent clients (needs `pip install mcp`; the app does not use it)
-- `evaluate_amd_model.py`, `evaluate_holdout.py`: evaluation scripts
-- `src/`: training and diagnostic scripts used while building the scikit-learn classifier
-- `models/`: saved models
-- `reports/amd_gpu/`, `reports/temporal_gpu/`: saved GPU runs, evaluation tables and timing evidence
-- `twinmind_sensor_data/`: sensor recordings used by the app
+| Path | Purpose |
+|---|---|
+| `app.py` | Main Streamlit dashboard |
+| `twinmind_panels.py` | Dashboard panel components |
+| `twinmind_theme.py` | Dashboard styling |
+| `amd_live.py` | Live sensor-screening implementation |
+| `amd_inference.py` | PyTorch temporal-model inference wrapper |
+| `agent.py` | Maintenance guidance and saved-report assistant |
+| `maintenance_docs/` | Maintenance reference material |
+| `agent_test.py` | Assistant tests |
+| `twinmind_mcp.py` | Experimental MCP tool server |
+| `evaluate_amd_model.py` | AMD model evaluation |
+| `evaluate_holdout.py` | Chronological holdout evaluation |
+| `src/` | Training and diagnostic scripts |
+| `models/` | Saved machine-learning models |
+| `reports/amd_gpu/` | GPU screening benchmarks and evidence |
+| `reports/temporal_gpu/` | Temporal model evaluation and timing evidence |
+| `twinmind_sensor_data/` | Sensor recordings used by the application |
 
-## Credits
+## Technical stack
 
-Data: UTK-ASL, Dataset_digital_twin_predictive_maintenance (see that repository for its license). Built with Python, Streamlit, Plotly, scikit-learn, pandas, NumPy and PyTorch (ROCm).
+- **Dashboard:** Python, Streamlit, Plotly
+- **Data processing:** pandas, NumPy
+- **Machine learning:** scikit-learn, PyTorch
+- **GPU acceleration:** AMD ROCm
+- **Development and reproducibility:** Git, Jupyter notebooks
+- **Experimental integration:** Model Context Protocol (MCP)
+
+## Important limitations
+
+TwinMind AI is a research and demonstration system, not a certified industrial safety or predictive-maintenance product.
+
+- The application analyzes historical laboratory recordings rather than live-connected industrial machinery.
+- The holdout evaluation uses data from one recording file and therefore does not establish generalization to previously unseen motors.
+- Sensor screening flags unusual values relative to a reference distribution; the results are not confirmed fault diagnoses.
+- Maintenance guidance should be verified by a qualified technician against actual equipment conditions and applicable safety procedures.
+- GPU speedups depend on hardware, software versions, workload size, and execution environment.
+- The current maintenance assistant uses saved screening reports and rule-based guidance; it does not call a language model in its documented dashboard implementation.
+
+## Future development
+
+Potential next steps include testing on independent motors, integrating live sensor acquisition, improving the weakest fault classes, and validating maintenance recommendations against expert-reviewed outcomes.
+
+## Acknowledgements
+
+- **Dataset:** UTK-ASL, `Dataset_digital_twin_predictive_maintenance`
+- **GPU platform:** AMD AI Notebooks
+- **Development framework:** AMD ROCm and PyTorch
+- **Application libraries:** Streamlit, Plotly, scikit-learn, pandas, and NumPy
+
+Built by **Shahzaman Jatoi** for the AMD Developer Hackathon: ACT III, Intelligent Industry track.
